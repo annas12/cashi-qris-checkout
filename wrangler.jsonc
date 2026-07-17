@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "cashi-qris-checkout",
   "pages_build_output_dir": "./public",
-  "compatibility_date": "2026-07-18",
+  "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
