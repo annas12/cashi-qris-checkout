@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pesanan Berhasil - Cashi QRIS Checkout</title>
+    <meta name="description" content="Pesanan Nutriflakes berhasil dibuat.">
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Cashi QRIS Checkout">
+        <span class="brand-mark">C</span>
+        <span>Cashi QRIS Checkout</span>
+      </a>
+      <nav class="nav-links" aria-label="Navigasi utama">
+        <a href="/">Beranda</a>
+        <a href="/checkout.html">Checkout</a>
+      </nav>
+    </header>
+
+    <main class="status-page">
+      <section class="status-box success">
+        <p class="eyebrow">Pesanan Dibuat</p>
+        <h1>Terima kasih, pesanan kamu sudah masuk.</h1>
+        <p id="successMessage">
+          Status pembayaran masih pending karena integrasi QRIS Cashi belum diaktifkan.
+        </p>
+        <div class="status-detail">
+          <span>Nomor order</span>
+          <strong id="orderNumber">-</strong>
+        </div>
+        <a class="button button-primary" href="/checkout.html">Buat Pesanan Baru</a>
+      </section>
+    </main>
+
+    <script src="/js/app.js" defer></script>
+  </body>
+</html>
