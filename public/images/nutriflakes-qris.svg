@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" role="img" aria-labelledby="title desc">
+  <title id="title">Mockup Nutriflakes QRIS Checkout</title>
+  <desc id="desc">Ilustrasi paket Nutriflakes dan layar checkout QRIS.</desc>
+  <rect width="980" height="560" rx="0" fill="#F6FAF7"/>
+  <rect x="54" y="58" width="872" height="444" rx="8" fill="#FFFFFF" stroke="#DCE7DE" stroke-width="3"/>
+  <rect x="112" y="124" width="270" height="318" rx="8" fill="#2DA644"/>
+  <path d="M112 192h270v250H112z" fill="#1D6F32"/>
+  <rect x="142" y="98" width="210" height="52" rx="8" fill="#F5C542"/>
+  <text x="247" y="133" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#162018">Nutriflakes</text>
+  <text x="247" y="242" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="800" fill="#FFFFFF">Healthy</text>
+  <text x="247" y="282" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="800" fill="#FFFFFF">Checkout</text>
+  <rect x="160" y="324" width="174" height="58" rx="8" fill="#FFF4C2"/>
+  <text x="247" y="361" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#1D6F32">Paket QRIS</text>
+  <rect x="518" y="92" width="276" height="376" rx="34" fill="#162018"/>
+  <rect x="540" y="130" width="232" height="298" rx="8" fill="#FFFFFF"/>
+  <rect x="574" y="164" width="164" height="34" rx="8" fill="#2DA644"/>
+  <text x="656" y="187" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">QRIS</text>
+  <rect x="584" y="230" width="144" height="144" fill="#162018"/>
+  <rect x="598" y="244" width="32" height="32" fill="#FFFFFF"/>
+  <rect x="682" y="244" width="32" height="32" fill="#FFFFFF"/>
+  <rect x="598" y="328" width="32" height="32" fill="#FFFFFF"/>
+  <rect x="640" y="286" width="18" height="18" fill="#FFFFFF"/>
+  <rect x="666" y="312" width="22" height="22" fill="#FFFFFF"/>
+  <rect x="700" y="334" width="14" height="14" fill="#FFFFFF"/>
+  <rect x="612" y="286" width="16" height="16" fill="#FFFFFF"/>
+  <rect x="646" y="344" width="20" height="16" fill="#FFFFFF"/>
+  <text x="656" y="406" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#1D6F32">Scan untuk bayar</text>
+  <circle cx="656" cy="448" r="7" fill="#F5C542"/>
+</svg>
