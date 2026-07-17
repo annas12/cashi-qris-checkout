@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cashi QRIS Checkout</title>
+    <meta name="description" content="Checkout QRIS sederhana untuk landing page produk Nutriflakes.">
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Cashi QRIS Checkout">
+        <span class="brand-mark">C</span>
+        <span>Cashi QRIS Checkout</span>
+      </a>
+      <nav class="nav-links" aria-label="Navigasi utama">
+        <a href="/checkout.html">Checkout</a>
+        <a href="#paket">Paket</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero-section">
+        <div class="hero-content">
+          <p class="eyebrow">Checkout QRIS untuk Nutriflakes</p>
+          <h1>Nutriflakes lebih mudah dibayar dengan QRIS.</h1>
+          <p class="hero-copy">
+            Fondasi checkout mobile-first untuk menerima pesanan, mencatat data pelanggan,
+            dan menyiapkan alur pembayaran QRIS melalui Cashi pada tahap berikutnya.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="/checkout.html">Mulai Checkout</a>
+            <a class="button button-secondary" href="#paket">Lihat Paket</a>
+          </div>
+        </div>
+        <div class="product-visual" aria-label="Ilustrasi paket Nutriflakes dan QRIS">
+          <img src="/images/nutriflakes-qris.svg" alt="Mockup paket Nutriflakes dengan tampilan QRIS">
+        </div>
+      </section>
+
+      <section class="section" id="paket">
+        <div class="section-heading">
+          <p class="eyebrow">Pilihan Paket</p>
+          <h2>Paket sederhana untuk tahap awal</h2>
+          <p>Paket dapat diubah nanti saat harga final, promo, dan integrasi pembayaran sudah siap.</p>
+        </div>
+
+        <div class="package-grid">
+          <article class="package-card">
+            <span class="package-tag">Starter</span>
+            <h3>Paket 1 Box</h3>
+            <p class="price">Rp 149.000</p>
+            <p>Cocok untuk pembeli pertama yang ingin mencoba Nutriflakes.</p>
+          </article>
+          <article class="package-card package-card-highlight">
+            <span class="package-tag">Terlaris</span>
+            <h3>Paket 2 Box</h3>
+            <p class="price">Rp 279.000</p>
+            <p>Pilihan praktis untuk stok lebih hemat di rumah.</p>
+          </article>
+          <article class="package-card">
+            <span class="package-tag">Hemat</span>
+            <h3>Paket 3 Box</h3>
+            <p class="price">Rp 399.000</p>
+            <p>Untuk pelanggan yang ingin membeli lebih banyak sekaligus.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="eyebrow">Alur Checkout</p>
+          <h2>Form singkat, data rapi, siap lanjut ke QRIS.</h2>
+        </div>
+        <ol class="steps">
+          <li>Customer mengisi nama, WhatsApp, alamat, dan paket.</li>
+          <li>Frontend melakukan validasi dasar sebelum dikirim.</li>
+          <li>Pages Function membuat order awal dan menunggu integrasi Cashi.</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>&copy; <span id="year"></span> Cashi QRIS Checkout. Fondasi project tanpa API key di source code.</p>
+    </footer>
+
+    <script src="/js/app.js" defer></script>
+  </body>
+</html>
