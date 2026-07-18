@@ -1,10 +1,11 @@
 {
   "type": "module",
   "scripts": {
-    "test": "node tests/create-order.test.mjs && node tests/check-status.test.mjs && node tests/frontend-flow.test.mjs",
+    "test": "node tests/create-order.test.mjs && node tests/check-status.test.mjs && node tests/frontend-flow.test.mjs && node tests/webhook-cashi.test.mjs",
     "test:check-status": "node tests/check-status.test.mjs",
     "test:create-order": "node tests/create-order.test.mjs",
-    "test:frontend": "node tests/frontend-flow.test.mjs"
+    "test:frontend": "node tests/frontend-flow.test.mjs",
+    "test:webhook": "node tests/webhook-cashi.test.mjs"
   },
   "devDependencies": {
     "wrangler": "latest"

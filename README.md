@@ -24,10 +24,14 @@ functions/
 migrations/
   0001_create_orders.sql
   0002_add_client_request_id.sql
+  0003_create_webhook_events.sql
+scripts/
+  sign-webhook.mjs
 tests/
   create-order.test.mjs
   check-status.test.mjs
   frontend-flow.test.mjs
+  webhook-cashi.test.mjs
 wrangler.jsonc
 package.json
 ```
@@ -41,6 +45,7 @@ package.json
 - QRIS, nominal unik, countdown, dan status pembayaran ditampilkan dari `GET /api/check-status`.
 - Polling berhenti ketika status `PAID`, `EXPIRED`, atau `PAYMENT_FAILED`.
 - Halaman `/sukses.html?order_id=...` hanya menampilkan sukses jika backend mengembalikan `PAID`.
+- Webhook `POST /api/webhook/cashi` memverifikasi signature Cashi dan mengubah order `PENDING` menjadi `PAID` secara idempotent.
 
 ## Status Pembayaran
 
@@ -49,7 +54,7 @@ package.json
 - `PAYMENT_FAILED`: pembayaran QRIS belum dapat dibuat.
 - `EXPIRED`: waktu pembayaran habis.
 
-Webhook production belum aktif pada tahap ini. Status `PAID` untuk production akan diperbarui otomatis setelah webhook Cashi dikerjakan pada tahap berikutnya.
+Status `PAID` production diperbarui oleh webhook Cashi setelah Cashi mengirim event `PAYMENT_SETTLED`.
 
 ## Secret Cloudflare
 
@@ -58,6 +63,7 @@ Buat secret berikut di Cloudflare Pages:
 ```powershell
 npx.cmd wrangler@latest pages secret put CASHI_API_KEY
 npx.cmd wrangler@latest pages secret put ALLOWED_ORIGIN
+npx.cmd wrangler@latest pages secret put CASHI_WEBHOOK_SECRET --project-name cashi-qris-checkout
 ```
 
 Isi `ALLOWED_ORIGIN` dengan origin website production, misalnya:
@@ -116,6 +122,7 @@ Untuk menguji tanpa credential asli, buat `.dev.vars` lokal yang tidak dicommit:
 CASHI_API_KEY=test_api_key
 ALLOWED_ORIGIN=http://127.0.0.1:8788
 CASHI_MOCK_MODE=success
+CASHI_WEBHOOK_SECRET=test_webhook_secret
 ```
 
 Nilai `CASHI_MOCK_MODE=success` membuat endpoint mengembalikan respons Cashi tiruan. Gunakan `CASHI_MOCK_MODE=failure` untuk menguji jalur gagal.
@@ -124,6 +131,12 @@ Jalankan test otomatis:
 
 ```powershell
 npm.cmd test
+```
+
+Jalankan test webhook saja:
+
+```powershell
+npm.cmd run test:webhook
 ```
 
 ## Membuat Order Lewat API Lokal
@@ -198,6 +211,91 @@ Respons `check-status` hanya mengembalikan data publik:
 }
 ```
 
+## Webhook Cashi
+
+URL webhook production:
+
+```text
+https://SUBDOMAIN/api/webhook/cashi
+```
+
+Ganti `SUBDOMAIN` dengan domain Cloudflare Pages production.
+
+Event pembayaran berhasil yang diterima:
+
+```json
+{
+  "event": "PAYMENT_SETTLED",
+  "data": {
+    "order_id": "NF-20260718-ABC123",
+    "amount": 95023,
+    "status": "SETTLED",
+    "paid_at": "2026-07-18 10:20:00"
+  }
+}
+```
+
+Webhook membaca raw body, memverifikasi header `x-gateway-signature` dengan HMAC SHA-256 dan secret `CASHI_WEBHOOK_SECRET`, lalu mencocokkan `amount` dengan `payment_amount` di database sebelum menandai order sebagai `PAID`.
+
+Menjalankan migration 0003 lokal:
+
+```powershell
+npx.cmd wrangler d1 migrations apply cashi-qris-checkout-db --local
+```
+
+Menjalankan migration 0003 remote/production:
+
+```powershell
+npx.cmd wrangler d1 migrations apply cashi-qris-checkout-db --remote
+```
+
+Memeriksa tabel webhook lokal:
+
+```powershell
+npx.cmd wrangler d1 execute cashi-qris-checkout-db --local --command "SELECT name, sql FROM sqlite_master WHERE type IN ('table','index') AND name LIKE '%webhook_events%';"
+```
+
+Membuat payload test dan signature dari file UTF-8 tanpa BOM:
+
+```powershell
+$payload = '{"event":"PAYMENT_SETTLED","data":{"order_id":"NF-20260718-MOCK01","amount":95023,"status":"SETTLED","paid_at":"2026-07-18 10:20:00"}}'
+[System.IO.File]::WriteAllText(
+  (Join-Path (Get-Location) "webhook-payload.json"),
+  $payload,
+  [System.Text.UTF8Encoding]::new($false)
+)
+
+$signature = node .\scripts\sign-webhook.mjs --secret test_webhook_secret --file .\webhook-payload.json
+```
+
+Mengirim webhook lokal dengan signature valid:
+
+```powershell
+curl.exe -sS `
+  -X POST "http://127.0.0.1:8788/api/webhook/cashi" `
+  -H "Content-Type: application/json" `
+  -H "x-gateway-signature: $signature" `
+  --data-binary "@webhook-payload.json"
+```
+
+Memastikan order berubah menjadi `PAID`:
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8788/api/check-status?order_id=NF-20260718-MOCK01"
+```
+
+Menguji webhook duplikat:
+
+```powershell
+curl.exe -sS `
+  -X POST "http://127.0.0.1:8788/api/webhook/cashi" `
+  -H "Content-Type: application/json" `
+  -H "x-gateway-signature: $signature" `
+  --data-binary "@webhook-payload.json"
+```
+
+Request duplikat yang payload dan signature-nya sama tetap mengembalikan `success: true` tanpa update order kedua.
+
 ## Menguji Halaman Sukses Lokal
 
 Ubah mock order menjadi `PAID`:
@@ -234,8 +332,9 @@ Build output directory: public
 
 - Jangan commit `.dev.vars`, API key, token, atau credential.
 - Secret production harus disimpan melalui Cloudflare dashboard atau perintah secret Wrangler.
+- Jangan menaruh webhook secret production di `wrangler.jsonc`, `.dev.vars` yang dikomit, README, atau frontend.
 - Query D1 memakai prepared statement dan parameter binding.
 - Respons API tidak mengembalikan API key, `customer_name`, `phone`, `address`, `client_request_id`, `cashi_payload`, stack trace, atau detail internal Cloudflare.
 - QR URL frontend hanya menerima `data:image/png;base64`, `data:image/jpeg;base64`, atau HTTPS.
 - Checkout URL frontend hanya menerima HTTPS dari `cashi.id` atau subdomainnya.
-- Webhook Cashi belum diimplementasikan pada tahap ini.
+- Webhook Cashi tidak mencetak secret, signature lengkap, payload mentah, nomor telepon, alamat, atau QR data ke log.
