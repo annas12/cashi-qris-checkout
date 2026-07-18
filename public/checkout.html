@@ -23,7 +23,7 @@
       <section class="checkout-panel">
         <p class="eyebrow">Form Pesanan</p>
         <h1>Checkout Nutriflakes</h1>
-        <p class="muted">Isi data pengiriman. Integrasi QRIS Cashi akan ditambahkan pada tahap berikutnya.</p>
+        <p class="muted">Isi data pengiriman untuk membuat pembayaran QRIS Cashi.</p>
 
         <form id="checkoutForm" class="checkout-form" novalidate>
           <div class="field">
@@ -48,9 +48,9 @@
             <label for="packageId">Pilihan paket</label>
             <select id="packageId" name="packageId" required>
               <option value="">Pilih paket</option>
-              <option value="nf-1">Paket 1 Box - Rp 149.000</option>
-              <option value="nf-2">Paket 2 Box - Rp 279.000</option>
-              <option value="nf-3">Paket 3 Box - Rp 399.000</option>
+              <option value="NF-1">Paket 1 Box - Rp 95.000</option>
+              <option value="NF-2">Paket 2 Box - Rp 190.000</option>
+              <option value="NF-3">Paket 3 Box - Rp 276.000</option>
             </select>
             <small class="error-message" data-error-for="packageId"></small>
           </div>
@@ -67,16 +67,17 @@
       </section>
 
       <aside class="checkout-note">
-        <p class="eyebrow">Status Tahap 1</p>
-        <h2>Belum terhubung ke API Cashi.</h2>
+        <p class="eyebrow">Status Tahap 3</p>
+        <h2>Terhubung ke API Cashi.</h2>
         <p>
-          Saat ini backend hanya membuat order awal dan mengembalikan status pending.
+          Backend membuat order, menyimpan data ke D1, lalu membuat pembayaran QRIS melalui Cashi.
           Secret, API key, dan credential pembayaran tidak disimpan di source code.
         </p>
         <ul class="check-list">
           <li>Validasi frontend dasar</li>
           <li>Pages Functions untuk endpoint API</li>
           <li>Skema D1 untuk penyimpanan order</li>
+          <li>Idempotency untuk mencegah order ganda</li>
         </ul>
       </aside>
     </main>

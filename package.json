@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "scripts": {
+    "test:create-order": "node tests/create-order.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "latest"
+  }
+}

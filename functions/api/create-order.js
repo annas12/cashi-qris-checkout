@@ -1,127 +1,533 @@
-const PACKAGE_CATALOG = {
-  "nf-1": {
-    label: "Paket 1 Box",
-    amount: 149000
+const CASHI_CREATE_ORDER_URL = "https://cashi.id/api/create-order";
+const MAX_BODY_BYTES = 8192;
+const MAX_ORDER_ID_RETRIES = 5;
+const CASHI_TIMEOUT_MS = 10000;
+const MAX_CASHI_PAYLOAD_BYTES = 8000;
+
+const PRODUCT_CATALOG = {
+  "NF-1": {
+    product_name: "Nutriflakes 1 Box",
+    quantity: 1,
+    amount: 95000
   },
-  "nf-2": {
-    label: "Paket 2 Box",
-    amount: 279000
+  "NF-2": {
+    product_name: "Nutriflakes 2 Box",
+    quantity: 2,
+    amount: 190000
   },
-  "nf-3": {
-    label: "Paket 3 Box",
-    amount: 399000
+  "NF-3": {
+    product_name: "Nutriflakes 3 Box",
+    quantity: 3,
+    amount: 276000
   }
 };
 
-function json(data, status = 200) {
-  return Response.json(data, {
-    status,
-    headers: {
-      "Cache-Control": "no-store"
-    }
-  });
+const SECURITY_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Type": "application/json; charset=utf-8",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "geolocation=(), microphone=(), camera=()"
+};
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
 }
 
-function normalizeWhatsapp(value) {
-  return String(value || "").replace(/[^\d+]/g, "").replace(/^(\+62|62)/, "0");
-}
+function getOriginHeaders(request, env) {
+  const origin = request.headers.get("Origin");
+  const allowedOrigin = String(env.ALLOWED_ORIGIN || "").trim();
 
-function validateOrder(payload) {
-  const fullName = String(payload.fullName || "").trim();
-  const whatsapp = normalizeWhatsapp(payload.whatsapp);
-  const address = String(payload.address || "").trim();
-  const packageId = String(payload.packageId || "").trim();
-  const selectedPackage = PACKAGE_CATALOG[packageId];
-  const errors = {};
+  if (!origin) {
+    return { allowed: true, headers: {} };
+  }
 
-  if (fullName.length < 3) errors.fullName = "Nama lengkap minimal 3 karakter.";
-  if (!/^08\d{8,13}$/.test(whatsapp)) errors.whatsapp = "Nomor WhatsApp tidak valid.";
-  if (address.length < 12) errors.address = "Alamat terlalu singkat.";
-  if (!selectedPackage) errors.packageId = "Paket tidak tersedia.";
+  if (!allowedOrigin || origin !== allowedOrigin) {
+    return { allowed: false, headers: {} };
+  }
 
   return {
-    errors,
-    value: {
-      fullName,
-      whatsapp,
-      address,
-      packageId,
-      packageLabel: selectedPackage?.label,
-      amount: selectedPackage?.amount
+    allowed: true,
+    headers: {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Vary": "Origin"
     }
   };
 }
 
-export async function onRequestPost(context) {
-  let payload;
+function json(context, data, status = 200) {
+  const cors = getOriginHeaders(context.request, context.env || {});
+  const headers = {
+    ...SECURITY_HEADERS,
+    ...cors.headers
+  };
+
+  return new Response(JSON.stringify(data), {
+    status,
+    headers
+  });
+}
+
+function safeLog(message, details = {}) {
+  console.error(message, {
+    order_id: details.order_id,
+    status: details.status,
+    reason: details.reason
+  });
+}
+
+function assertAllowedOrigin(context) {
+  const cors = getOriginHeaders(context.request, context.env || {});
+
+  if (!cors.allowed) {
+    throw new HttpError(403, "Origin tidak diizinkan.");
+  }
+}
+
+function assertJsonRequest(request) {
+  const contentType = request.headers.get("Content-Type") || "";
+
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new HttpError(415, "Content-Type harus application/json.");
+  }
+
+  const contentLength = Number(request.headers.get("Content-Length") || "0");
+
+  if (contentLength > MAX_BODY_BYTES) {
+    throw new HttpError(413, "Ukuran request terlalu besar.");
+  }
+}
+
+async function readJsonBody(request) {
+  const rawBody = await request.text();
+
+  if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
+    throw new HttpError(413, "Ukuran request terlalu besar.");
+  }
 
   try {
-    payload = await context.request.json();
+    return JSON.parse(rawBody);
   } catch (error) {
-    return json({ message: "Body harus berupa JSON yang valid." }, 400);
+    throw new HttpError(400, "Body harus berupa JSON yang valid.");
+  }
+}
+
+function normalizePhone(value) {
+  const cleaned = String(value || "").replace(/[^\d+]/g, "");
+  let phone = cleaned;
+
+  if (phone.startsWith("+62")) {
+    phone = phone.slice(1);
+  } else if (phone.startsWith("0")) {
+    phone = `62${phone.slice(1)}`;
   }
 
-  const { errors, value } = validateOrder(payload);
+  return phone;
+}
+
+function normalizeProductCode(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function validateClientRequestId(value) {
+  const clientRequestId = String(value || "").trim();
+
+  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(clientRequestId)) {
+    return null;
+  }
+
+  return clientRequestId;
+}
+
+function validateOrderPayload(payload) {
+  const customerName = String(payload.customer_name ?? payload.fullName ?? "").trim();
+  const phone = normalizePhone(payload.phone ?? payload.whatsapp);
+  const address = String(payload.address || "").trim();
+  const productCode = normalizeProductCode(payload.product_code ?? payload.packageId);
+  const clientRequestId = validateClientRequestId(payload.client_request_id);
+  const product = PRODUCT_CATALOG[productCode];
+  const errors = {};
+
+  if (customerName.length < 2 || customerName.length > 100) {
+    errors.customer_name = "Nama pembeli harus 2 sampai 100 karakter.";
+  }
+
+  if (!/^628\d{8,12}$/.test(phone)) {
+    errors.phone = "Nomor HP Indonesia tidak valid.";
+  }
+
+  if (address.length < 5 || address.length > 500) {
+    errors.address = "Alamat harus 5 sampai 500 karakter.";
+  }
+
+  if (!product) {
+    errors.product_code = "Produk tidak tersedia.";
+  }
+
+  if (!clientRequestId) {
+    errors.client_request_id = "client_request_id tidak valid.";
+  }
 
   if (Object.keys(errors).length > 0) {
-    return json({ message: "Data pesanan belum valid.", errors }, 400);
+    throw new HttpError(400, "Data pesanan belum valid.");
   }
 
-  const orderId = `ORD-${Date.now()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-  const createdAt = new Date().toISOString();
+  return {
+    customerName,
+    phone,
+    address,
+    productCode,
+    clientRequestId,
+    product
+  };
+}
 
-  if (context.env.DB) {
-    await context.env.DB.prepare(
-      `INSERT INTO orders (
-        order_id,
-        customer_name,
-        phone,
-        address,
-        product_code,
-        product_name,
-        quantity,
-        base_amount,
-        payment_status,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+function getDateStamp(now = new Date()) {
+  const jakartaTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const year = jakartaTime.getUTCFullYear();
+  const month = String(jakartaTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(jakartaTime.getUTCDate()).padStart(2, "0");
+
+  return `${year}${month}${day}`;
+}
+
+function createRandomSuffix(randomSource = crypto) {
+  if (randomSource.randomUUID) {
+    return randomSource.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
+  }
+
+  const bytes = new Uint8Array(4);
+  randomSource.getRandomValues(bytes);
+
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+function createOrderId(options = {}) {
+  const now = options.now ? options.now() : new Date();
+  const randomSource = options.randomSource || crypto;
+
+  return `NF-${getDateStamp(now)}-${createRandomSuffix(randomSource)}`;
+}
+
+async function findOrderByClientRequestId(db, clientRequestId) {
+  return db
+    .prepare(
+      `SELECT order_id, customer_name, phone, address, product_code, product_name, quantity,
+              base_amount, payment_amount, payment_status, checkout_url, qr_url, expires_at,
+              client_request_id, created_at, updated_at
+       FROM orders
+       WHERE client_request_id = ?`
     )
-      .bind(
-        orderId,
-        value.fullName,
-        value.whatsapp,
-        value.address,
-        value.packageId,
-        value.packageLabel,
-        1,
-        value.amount,
-        "PENDING",
-        createdAt,
-        createdAt
-      )
-      .run();
+    .bind(clientRequestId)
+    .first();
+}
+
+async function insertPendingOrder(db, orderData, options = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt < MAX_ORDER_ID_RETRIES; attempt += 1) {
+    const orderId = createOrderId(options);
+    const createdAt = new Date().toISOString();
+
+    try {
+      await db
+        .prepare(
+          `INSERT INTO orders (
+            order_id,
+            client_request_id,
+            customer_name,
+            phone,
+            address,
+            product_code,
+            product_name,
+            quantity,
+            base_amount,
+            payment_status,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          orderId,
+          orderData.clientRequestId,
+          orderData.customerName,
+          orderData.phone,
+          orderData.address,
+          orderData.productCode,
+          orderData.product.product_name,
+          orderData.product.quantity,
+          orderData.product.amount,
+          "PENDING",
+          createdAt,
+          createdAt
+        )
+        .run();
+
+      return {
+        order_id: orderId,
+        client_request_id: orderData.clientRequestId,
+        customer_name: orderData.customerName,
+        phone: orderData.phone,
+        address: orderData.address,
+        product_code: orderData.productCode,
+        product_name: orderData.product.product_name,
+        quantity: orderData.product.quantity,
+        base_amount: orderData.product.amount,
+        payment_status: "PENDING",
+        created_at: createdAt,
+        updated_at: createdAt
+      };
+    } catch (error) {
+      lastError = error;
+      const existing = await findOrderByClientRequestId(db, orderData.clientRequestId);
+
+      if (existing) {
+        return existing;
+      }
+    }
   }
 
-  return json(
-    {
-      order_id: orderId,
-      status: "pending",
-      package: {
-        id: value.packageId,
-        label: value.packageLabel,
-        amount: value.amount
-      },
-      payment: {
-        method: "QRIS",
-        provider: "Cashi",
-        qris_ready: false,
-        message: "Integrasi API Cashi belum diaktifkan pada tahap ini."
-      }
-    },
-    201
-  );
+  throw lastError || new Error("Unable to create unique order ID");
 }
 
-export function onRequestGet() {
-  return json({ message: "Gunakan metode POST untuk membuat order." }, 405);
+function normalizeCashiResponse(payload) {
+  const amount = Number(payload.amount);
+
+  return {
+    order_id: payload.order_id,
+    amount: Number.isFinite(amount) ? amount : null,
+    checkout_url: payload.checkout_url || null,
+    qr_url: payload.qrUrl || payload.qr_url || null,
+    expires_at: payload.expires_at || null
+  };
 }
+
+function serializeCashiPayload(payload) {
+  const serialized = JSON.stringify(payload);
+
+  if (new TextEncoder().encode(serialized).byteLength <= MAX_CASHI_PAYLOAD_BYTES) {
+    return serialized;
+  }
+
+  return serialized.slice(0, MAX_CASHI_PAYLOAD_BYTES);
+}
+
+function isCompletedPayment(order) {
+  return Boolean(order.payment_amount || order.checkout_url || order.qr_url);
+}
+
+function toFrontendResponse(order) {
+  return {
+    success: true,
+    order_id: order.order_id,
+    product_name: order.product_name,
+    quantity: order.quantity,
+    base_amount: order.base_amount,
+    payment_amount: order.payment_amount,
+    checkout_url: order.checkout_url,
+    qr_url: order.qr_url,
+    expires_at: order.expires_at
+  };
+}
+
+async function mockCashiResponse(order, env) {
+  if (env.CASHI_MOCK_MODE === "failure") {
+    throw new Error("Mock Cashi failure");
+  }
+
+  if (env.CASHI_MOCK_MODE === "success") {
+    return {
+      success: true,
+      order_id: order.order_id,
+      amount: order.base_amount + 23,
+      checkout_url: `https://cashi.id/pay/${order.order_id}`,
+      qrUrl: "data:image/png;base64,mock_qris",
+      expires_at: "2026-07-18 10:00:00"
+    };
+  }
+
+  return null;
+}
+
+async function callCashi(order, env, options = {}) {
+  const mocked = await mockCashiResponse(order, env);
+
+  if (mocked) {
+    return mocked;
+  }
+
+  if (!env.CASHI_API_KEY) {
+    throw new Error("Cashi API key is not configured");
+  }
+
+  const fetchImpl = options.fetchImpl || fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CASHI_TIMEOUT_MS);
+
+  try {
+    const response = await fetchImpl(CASHI_CREATE_ORDER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": env.CASHI_API_KEY
+      },
+      body: JSON.stringify({
+        amount: order.base_amount,
+        order_id: order.order_id
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const error = new Error("Cashi returned a non-2xx response");
+      error.status = response.status;
+      throw error;
+    }
+
+    const payload = await response.json();
+
+    if (!payload || payload.success !== true) {
+      throw new Error("Cashi response was not successful");
+    }
+
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function updateOrderWithCashiSuccess(db, order, cashiPayload) {
+  const normalized = normalizeCashiResponse(cashiPayload);
+  const updatedAt = new Date().toISOString();
+  const paymentAmount = normalized.amount ?? order.base_amount;
+
+  await db
+    .prepare(
+      `UPDATE orders
+       SET payment_amount = ?,
+           checkout_url = ?,
+           qr_url = ?,
+           expires_at = ?,
+           cashi_payload = ?,
+           updated_at = ?
+       WHERE order_id = ?`
+    )
+    .bind(
+      paymentAmount,
+      normalized.checkout_url,
+      normalized.qr_url,
+      normalized.expires_at,
+      serializeCashiPayload(cashiPayload),
+      updatedAt,
+      order.order_id
+    )
+    .run();
+
+  return {
+    ...order,
+    payment_amount: paymentAmount,
+    checkout_url: normalized.checkout_url,
+    qr_url: normalized.qr_url,
+    expires_at: normalized.expires_at,
+    cashi_payload: serializeCashiPayload(cashiPayload),
+    updated_at: updatedAt
+  };
+}
+
+async function updateOrderWithCashiFailure(db, order) {
+  await db
+    .prepare(
+      `UPDATE orders
+       SET payment_status = ?,
+           updated_at = ?
+       WHERE order_id = ?`
+    )
+    .bind("PAYMENT_FAILED", new Date().toISOString(), order.order_id)
+    .run();
+}
+
+export async function handleCreateOrder(context, options = {}) {
+  try {
+    assertAllowedOrigin(context);
+    assertJsonRequest(context.request);
+
+    if (!context.env.DB) {
+      throw new HttpError(500, "Konfigurasi server belum siap.");
+    }
+
+    const payload = await readJsonBody(context.request);
+    const orderData = validateOrderPayload(payload);
+    const existing = await findOrderByClientRequestId(context.env.DB, orderData.clientRequestId);
+    const order = existing || (await insertPendingOrder(context.env.DB, orderData, options));
+
+    if (isCompletedPayment(order)) {
+      return json(context, toFrontendResponse(order));
+    }
+
+    let cashiPayload;
+
+    try {
+      cashiPayload = await callCashi(order, context.env, options);
+    } catch (error) {
+      await updateOrderWithCashiFailure(context.env.DB, order);
+      safeLog("Cashi create order failed", {
+        order_id: order.order_id,
+        status: error.status || "request_failed",
+        reason: "payment_create_failed"
+      });
+
+      return json(
+        context,
+        { message: "Pembayaran belum dapat dibuat. Silakan coba kembali." },
+        502
+      );
+    }
+
+    const updatedOrder = await updateOrderWithCashiSuccess(context.env.DB, order, cashiPayload);
+
+    return json(context, toFrontendResponse(updatedOrder), 201);
+  } catch (error) {
+    if (error instanceof HttpError) {
+      return json(context, { message: error.message }, error.status);
+    }
+
+    safeLog("Create order failed", { reason: "unexpected_error" });
+    return json(context, { message: "Pesanan belum dapat dibuat." }, 500);
+  }
+}
+
+export async function onRequestPost(context) {
+  return handleCreateOrder(context);
+}
+
+export function onRequestOptions(context) {
+  const cors = getOriginHeaders(context.request, context.env || {});
+
+  if (!cors.allowed) {
+    return json(context, { message: "Origin tidak diizinkan." }, 403);
+  }
+
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...SECURITY_HEADERS,
+      ...cors.headers
+    }
+  });
+}
+
+export function onRequestGet(context) {
+  return json(context, { message: "Gunakan metode POST untuk membuat order." }, 405);
+}
+
+export {
+  PRODUCT_CATALOG,
+  normalizeCashiResponse,
+  normalizePhone,
+  validateOrderPayload
+};
