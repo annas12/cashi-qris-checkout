@@ -1,4 +1,4 @@
-const ALLOWED_STATUSES = new Set(["pending", "paid", "failed", "expired"]);
+const ALLOWED_STATUSES = new Set(["PENDING", "PAID", "FAILED", "EXPIRED"]);
 
 function json(data, status = 200) {
   return Response.json(data, {
@@ -19,7 +19,10 @@ export async function onRequestPost(context) {
   }
 
   const orderId = String(payload.order_id || payload.orderId || "").trim();
-  const status = String(payload.status || "").trim().toLowerCase();
+  const status = String(payload.status || "").trim().toUpperCase();
+  const paymentAmount = Number(payload.payment_amount ?? payload.amount);
+  const safePaymentAmount = Number.isFinite(paymentAmount) ? paymentAmount : null;
+  const updatedAt = new Date().toISOString();
 
   if (!orderId || !ALLOWED_STATUSES.has(status)) {
     return json({ message: "Payload webhook belum valid." }, 400);
@@ -28,14 +31,20 @@ export async function onRequestPost(context) {
   if (context.env.DB) {
     await context.env.DB.prepare(
       `UPDATE orders
-       SET status = ?, provider_reference = ?, raw_payload = ?, updated_at = ?
-       WHERE id = ?`
+       SET payment_status = ?,
+           payment_amount = COALESCE(?, payment_amount),
+           cashi_payload = ?,
+           updated_at = ?,
+           paid_at = CASE WHEN ? = 'PAID' THEN ? ELSE paid_at END
+       WHERE order_id = ?`
     )
       .bind(
         status,
-        String(payload.reference || payload.transaction_id || ""),
+        safePaymentAmount,
         JSON.stringify(payload),
-        new Date().toISOString(),
+        updatedAt,
+        status,
+        updatedAt,
         orderId
       )
       .run();
@@ -44,7 +53,8 @@ export async function onRequestPost(context) {
   return json({
     received: true,
     order_id: orderId,
-    status,
+    status: status.toLowerCase(),
+    payment_status: status,
     message: "Webhook diterima. Verifikasi signature dapat ditambahkan saat secret Cashi tersedia."
   });
 }

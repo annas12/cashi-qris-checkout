@@ -1,19 +1,25 @@
 CREATE TABLE IF NOT EXISTS orders (
-  id TEXT PRIMARY KEY,
-  full_name TEXT NOT NULL,
-  whatsapp TEXT NOT NULL,
-  address TEXT NOT NULL,
-  package_id TEXT NOT NULL,
-  package_label TEXT NOT NULL,
-  amount INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'failed', 'expired')),
-  provider TEXT NOT NULL DEFAULT 'cashi',
-  provider_reference TEXT,
-  raw_payload TEXT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id TEXT UNIQUE NOT NULL,
+  customer_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  address TEXT,
+  product_code TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  base_amount INTEGER NOT NULL,
+  payment_amount INTEGER,
+  payment_status TEXT NOT NULL DEFAULT 'PENDING',
+  checkout_url TEXT,
+  qr_url TEXT,
+  expires_at TEXT,
+  cashi_payload TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updated_at TEXT,
+  paid_at TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_whatsapp ON orders(whatsapp);
+CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id);
+CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(phone);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);

@@ -73,17 +73,18 @@ export async function onRequestPost(context) {
   if (context.env.DB) {
     await context.env.DB.prepare(
       `INSERT INTO orders (
-        id,
-        full_name,
-        whatsapp,
+        order_id,
+        customer_name,
+        phone,
         address,
-        package_id,
-        package_label,
-        amount,
-        status,
+        product_code,
+        product_name,
+        quantity,
+        base_amount,
+        payment_status,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         orderId,
@@ -92,8 +93,9 @@ export async function onRequestPost(context) {
         value.address,
         value.packageId,
         value.packageLabel,
+        1,
         value.amount,
-        "pending",
+        "PENDING",
         createdAt,
         createdAt
       )
