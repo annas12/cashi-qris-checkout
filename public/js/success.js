@@ -52,7 +52,7 @@ function formatDateTime(value) {
 async function fetchWithTimeout(url, init = {}, options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const timeoutMs = options.timeoutMs || FETCH_TIMEOUT_MS;
-  controller = new AbortController();
+  const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
