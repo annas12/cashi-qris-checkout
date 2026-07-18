@@ -25,9 +25,9 @@ export async function onRequestGet(context) {
   }
 
   const order = await context.env.DB.prepare(
-    `SELECT id, status, amount, package_label, created_at, updated_at
+    `SELECT order_id, payment_status, payment_amount, base_amount, product_name, created_at, updated_at
      FROM orders
-     WHERE id = ?`
+     WHERE order_id = ?`
   )
     .bind(orderId)
     .first();
@@ -37,10 +37,12 @@ export async function onRequestGet(context) {
   }
 
   return json({
-    order_id: order.id,
-    status: order.status,
-    amount: order.amount,
-    package_label: order.package_label,
+    order_id: order.order_id,
+    status: String(order.payment_status || "PENDING").toLowerCase(),
+    payment_status: order.payment_status,
+    amount: order.payment_amount ?? order.base_amount,
+    package_label: order.product_name,
+    product_name: order.product_name,
     created_at: order.created_at,
     updated_at: order.updated_at
   });

@@ -19,6 +19,7 @@ public/
 functions/
   api/create-order.js
   api/check-status.js
+  api/health.js
   api/webhook/cashi.js
 migrations/
   0001_create_orders.sql
@@ -35,16 +36,65 @@ AGENTS.md
 - Validasi frontend dasar.
 - Endpoint `POST /api/create-order` untuk membuat order awal.
 - Endpoint `GET /api/check-status?order_id=...` untuk cek status.
+- Endpoint sementara `GET /api/health` untuk memeriksa koneksi D1.
 - Endpoint `POST /api/webhook/cashi` sebagai placeholder webhook Cashi.
 - Skema D1 untuk tabel `orders`.
+
+## Perintah Windows PowerShell
+
+Jalankan semua perintah dari folder project. Gunakan `npx.cmd` di PowerShell agar tidak terkena pembatasan execution policy untuk file `.ps1`.
+
+Login Wrangler:
+
+```powershell
+npx.cmd wrangler login
+```
+
+Buat database D1 production:
+
+```powershell
+npx.cmd wrangler d1 create cashi-qris-checkout-db
+```
+
+Jika database sudah dibuat, jangan ganti `database_id` di `wrangler.jsonc` kecuali nilainya memang masih placeholder.
+
+Jalankan migration lokal:
+
+```powershell
+npx.cmd wrangler d1 migrations apply cashi-qris-checkout-db --local
+```
+
+Jalankan migration remote/production:
+
+```powershell
+npx.cmd wrangler d1 migrations apply cashi-qris-checkout-db --remote
+```
+
+Memeriksa tabel dan index lokal:
+
+```powershell
+npx.cmd wrangler d1 execute cashi-qris-checkout-db --local --command "SELECT name, sql FROM sqlite_master WHERE type IN ('table','index') AND tbl_name = 'orders';"
+```
+
+Memeriksa tabel dan index remote/production:
+
+```powershell
+npx.cmd wrangler d1 execute cashi-qris-checkout-db --remote --command "SELECT name, sql FROM sqlite_master WHERE type IN ('table','index') AND tbl_name = 'orders';"
+```
+
+Menjalankan Pages Dev:
+
+```powershell
+npx.cmd wrangler pages dev public --port 8788
+```
 
 ## Menjalankan Lokal
 
 Pastikan Node.js tersedia, lalu jalankan dari folder project:
 
-```bash
-npx wrangler d1 migrations apply cashi-qris-checkout-db --local
-npx wrangler pages dev public
+```powershell
+npx.cmd wrangler d1 migrations apply cashi-qris-checkout-db --local
+npx.cmd wrangler pages dev public --port 8788
 ```
 
 Buka:
@@ -62,23 +112,23 @@ Jika port lokal berbeda, ikuti URL yang ditampilkan Wrangler.
 
 Buat database D1 di Cloudflare:
 
-```bash
-npx wrangler d1 create cashi-qris-checkout-db
+```powershell
+npx.cmd wrangler d1 create cashi-qris-checkout-db
 ```
 
 Salin `database_id` dari output ke `wrangler.jsonc`, lalu jalankan migrasi production:
 
-```bash
-npx wrangler d1 migrations apply cashi-qris-checkout-db --remote
+```powershell
+npx.cmd wrangler d1 migrations apply cashi-qris-checkout-db --remote
 ```
 
 ## Deploy Cloudflare Pages
 
 Contoh deploy manual:
 
-```bash
-npx wrangler pages project create cashi-qris-checkout
-npx wrangler pages deploy public --project-name cashi-qris-checkout
+```powershell
+npx.cmd wrangler pages project create cashi-qris-checkout
+npx.cmd wrangler pages deploy public --project-name cashi-qris-checkout
 ```
 
 Untuk deploy via GitHub, hubungkan repository ini ke Cloudflare Pages dan gunakan:
