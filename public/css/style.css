@@ -40,6 +40,10 @@ img {
   max-width: 100%;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .site-header {
   position: sticky;
   top: 0;
@@ -182,6 +186,16 @@ h3 {
   transform: translateY(-1px);
 }
 
+.button:focus-visible,
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(45, 166, 68, 0.28);
+  outline-offset: 3px;
+}
+
 .button-primary {
   color: var(--surface);
   background: var(--green);
@@ -195,6 +209,20 @@ h3 {
 .button-secondary {
   color: var(--ink);
   background: var(--yellow);
+}
+
+.button-ghost {
+  color: var(--green-dark);
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.button-disabled,
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
 }
 
 .button-full {
@@ -298,6 +326,104 @@ h3 {
   display: grid;
   gap: 16px;
   margin-top: 24px;
+}
+
+.payment-panel {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 20px;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.payment-heading {
+  max-width: 760px;
+}
+
+.payment-grid {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+.qris-section,
+.payment-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.qris-box {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  padding: 16px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.qris-box.is-disabled {
+  opacity: 0.54;
+}
+
+.qris-box img {
+  width: min(100%, 320px);
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.summary-row span,
+.status-detail span {
+  color: var(--muted);
+}
+
+.summary-row strong {
+  text-align: right;
+}
+
+.summary-row-highlight strong {
+  color: var(--green-dark);
+  font-size: 1.15rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 10px;
+  color: var(--green-dark);
+  background: var(--success-soft);
+  border-radius: 8px;
+  font-size: 0.86rem;
+}
+
+.status-paid {
+  color: var(--green-dark);
+  background: var(--success-soft);
+}
+
+.status-expired,
+.status-payment-failed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .field {
@@ -424,6 +550,18 @@ select:focus {
   margin: 22px 0;
 }
 
+.success-details {
+  margin: 22px 0;
+}
+
+.success-details .status-detail {
+  margin: 0;
+}
+
+.success-details .status-detail + .status-detail {
+  margin-top: 10px;
+}
+
 @media (min-width: 720px) {
   .site-header {
     padding: 14px 36px;
@@ -454,7 +592,12 @@ select:focus {
 
   .checkout-panel,
   .checkout-note,
+  .payment-panel,
   .status-box {
     padding: 30px;
+  }
+
+  .payment-grid {
+    grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1fr);
   }
 }

@@ -196,6 +196,18 @@ function getDateStamp(now = new Date()) {
   return `${year}${month}${day}`;
 }
 
+function formatJakartaTimestamp(date) {
+  const jakartaTime = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  const year = jakartaTime.getUTCFullYear();
+  const month = String(jakartaTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(jakartaTime.getUTCDate()).padStart(2, "0");
+  const hour = String(jakartaTime.getUTCHours()).padStart(2, "0");
+  const minute = String(jakartaTime.getUTCMinutes()).padStart(2, "0");
+  const second = String(jakartaTime.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 function createRandomSuffix(randomSource = crypto) {
   if (randomSource.randomUUID) {
     return randomSource.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
@@ -346,8 +358,8 @@ async function mockCashiResponse(order, env) {
       order_id: order.order_id,
       amount: order.base_amount + 23,
       checkout_url: `https://cashi.id/pay/${order.order_id}`,
-      qrUrl: "data:image/png;base64,mock_qris",
-      expires_at: "2026-07-18 10:00:00"
+      qrUrl: "data:image/png;base64,iVBORw0KGgo=",
+      expires_at: formatJakartaTimestamp(new Date(Date.now() + 15 * 60 * 1000))
     };
   }
 

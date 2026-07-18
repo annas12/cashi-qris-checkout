@@ -1,7 +1,10 @@
 {
   "type": "module",
   "scripts": {
-    "test:create-order": "node tests/create-order.test.mjs"
+    "test": "node tests/create-order.test.mjs && node tests/check-status.test.mjs && node tests/frontend-flow.test.mjs",
+    "test:check-status": "node tests/check-status.test.mjs",
+    "test:create-order": "node tests/create-order.test.mjs",
+    "test:frontend": "node tests/frontend-flow.test.mjs"
   },
   "devDependencies": {
     "wrangler": "latest"
