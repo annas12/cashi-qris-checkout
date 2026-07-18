@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import {
   createPaymentPollingController,
+  fetchOrderStatus as fetchCheckoutOrderStatus,
   formatRupiah,
   isValidCheckoutUrl,
   isValidQrUrl
 } from "../public/js/checkout.js";
-import { getSuccessDecision } from "../public/js/success.js";
+import {
+  fetchOrderStatus as fetchSuccessOrderStatus,
+  getSuccessDecision
+} from "../public/js/success.js";
 
 const tests = [
   [
@@ -108,6 +112,32 @@ const tests = [
 
       assert.equal(decision.action, "redirect");
       assert.equal(decision.target, "/checkout.html?order_id=NF-20260718-ABC123");
+    }
+  ],
+  [
+    "halaman checkout dan sukses bisa fetch status order",
+    async () => {
+      const fetchImpl = async (url, init) => {
+        assert.equal(String(url), "/api/check-status?order_id=NF-20260718-ABC123");
+        assert.equal(init.signal instanceof AbortSignal, true);
+
+        return new Response(JSON.stringify({
+          success: true,
+          order_id: "NF-20260718-ABC123",
+          payment_status: "PAID"
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
+      };
+
+      const checkoutOrder = await fetchCheckoutOrderStatus("NF-20260718-ABC123", { fetchImpl });
+      const successOrder = await fetchSuccessOrderStatus("NF-20260718-ABC123", { fetchImpl });
+
+      assert.equal(checkoutOrder.payment_status, "PAID");
+      assert.equal(successOrder.payment_status, "PAID");
     }
   ],
   [
