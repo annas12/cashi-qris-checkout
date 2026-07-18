@@ -1,8 +1,8 @@
 # Cashi QRIS Checkout
 
-Fondasi website checkout QRIS untuk landing page produk Nutriflakes. Project ini memakai HTML, CSS, JavaScript vanilla, Cloudflare Pages Functions, dan Cloudflare D1.
+Website checkout QRIS untuk produk Nutriflakes. Project ini memakai HTML, CSS, JavaScript vanilla, Cloudflare Pages Functions, dan Cloudflare D1.
 
-Endpoint `POST /api/create-order` sudah terhubung ke API Cashi melalui secret Cloudflare. Tidak ada API key, token, atau secret apa pun di source code.
+API key, token, dan secret Cashi tidak boleh disimpan di source code, `wrangler.jsonc`, atau GitHub.
 
 ## Struktur
 
@@ -15,7 +15,7 @@ public/
   css/style.css
   js/app.js
   js/checkout.js
-  images/
+  js/success.js
 functions/
   api/create-order.js
   api/check-status.js
@@ -26,21 +26,30 @@ migrations/
   0002_add_client_request_id.sql
 tests/
   create-order.test.mjs
+  check-status.test.mjs
+  frontend-flow.test.mjs
 wrangler.jsonc
-README.md
 package.json
 ```
 
-## Fitur Tahap Ini
+## Fitur Saat Ini
 
-- Form checkout berisi nama lengkap, nomor WhatsApp, alamat, dan pilihan paket.
+- Form checkout membuat order melalui `POST /api/create-order`.
 - Harga produk ditentukan di backend, bukan dari browser.
-- Endpoint `POST /api/create-order` membuat order D1 dan pembayaran QRIS Cashi.
-- Endpoint `GET /api/check-status?order_id=...` untuk cek status.
-- Endpoint sementara `GET /api/health` untuk memeriksa koneksi D1.
-- Idempotency dengan `client_request_id` untuk mencegah order ganda saat klik ulang.
-- CORS hanya mengizinkan origin dari `ALLOWED_ORIGIN`.
-- Test mock Cashi tanpa credential asli.
+- Idempotency create order memakai `client_request_id`.
+- Halaman `/checkout.html?order_id=...` mengambil detail pembayaran dari backend.
+- QRIS, nominal unik, countdown, dan status pembayaran ditampilkan dari `GET /api/check-status`.
+- Polling berhenti ketika status `PAID`, `EXPIRED`, atau `PAYMENT_FAILED`.
+- Halaman `/sukses.html?order_id=...` hanya menampilkan sukses jika backend mengembalikan `PAID`.
+
+## Status Pembayaran
+
+- `PENDING`: menunggu pembayaran.
+- `PAID`: pembayaran berhasil.
+- `PAYMENT_FAILED`: pembayaran QRIS belum dapat dibuat.
+- `EXPIRED`: waktu pembayaran habis.
+
+Webhook production belum aktif pada tahap ini. Status `PAID` untuk production akan diperbarui otomatis setelah webhook Cashi dikerjakan pada tahap berikutnya.
 
 ## Secret Cloudflare
 
@@ -56,8 +65,6 @@ Isi `ALLOWED_ORIGIN` dengan origin website production, misalnya:
 ```text
 https://nama-project.pages.dev
 ```
-
-Jangan menaruh API key di `wrangler.jsonc`, `.dev.vars` yang ikut commit, source code, atau GitHub. `CASHI_WEBHOOK_SECRET` belum digunakan pada tahap ini; secret itu akan dipakai pada tahap webhook berikutnya.
 
 ## Perintah Windows PowerShell
 
@@ -111,15 +118,15 @@ ALLOWED_ORIGIN=http://127.0.0.1:8788
 CASHI_MOCK_MODE=success
 ```
 
-Nilai `CASHI_MOCK_MODE=success` membuat endpoint mengembalikan respons Cashi tiruan. Gunakan `CASHI_MOCK_MODE=failure` untuk menguji jalur HTTP 502.
+Nilai `CASHI_MOCK_MODE=success` membuat endpoint mengembalikan respons Cashi tiruan. Gunakan `CASHI_MOCK_MODE=failure` untuk menguji jalur gagal.
 
 Jalankan test otomatis:
 
 ```powershell
-npm.cmd run test:create-order
+npm.cmd test
 ```
 
-Contoh request lokal:
+## Membuat Order Lewat API Lokal
 
 ```powershell
 $body = @{
@@ -133,61 +140,79 @@ $body = @{
 Invoke-RestMethod -Uri "http://127.0.0.1:8788/api/create-order" -Method Post -ContentType "application/json" -Body $body
 ```
 
-## Endpoint Create Order
+Respons sukses akan berisi `order_id`. Buka halaman checkout lokal dengan format:
 
-Request:
-
-```json
-{
-  "customer_name": "Nama pembeli",
-  "phone": "081234567890",
-  "address": "Alamat pembeli",
-  "product_code": "NF-1",
-  "client_request_id": "uuid-dari-browser"
-}
+```powershell
+Start-Process "http://127.0.0.1:8788/checkout.html?order_id=NF-20260718-MOCK01"
 ```
 
-Response sukses:
+## Membuat Mock Order Manual
+
+Gunakan ini jika ingin menguji checkout tanpa memanggil create order:
+
+```powershell
+$sql = @"
+INSERT INTO orders (
+  order_id, client_request_id, customer_name, phone, address, product_code,
+  product_name, quantity, base_amount, payment_amount, payment_status,
+  checkout_url, qr_url, expires_at, created_at, updated_at
+) VALUES (
+  'NF-20260718-MOCK01', 'stage4-mock-01', 'Mock Buyer', '6281234567890',
+  'Jl. Mock No. 1', 'NF-1', 'Nutriflakes 1 Box', 1, 95000, 95023,
+  'PENDING', 'https://cashi.id/pay/NF-20260718-MOCK01',
+  'data:image/png;base64,iVBORw0KGgo=', '2026-07-18 23:59:00',
+  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT(order_id) DO UPDATE SET
+  payment_status = 'PENDING',
+  payment_amount = 95023,
+  checkout_url = 'https://cashi.id/pay/NF-20260718-MOCK01',
+  qr_url = 'data:image/png;base64,iVBORw0KGgo=',
+  expires_at = '2026-07-18 23:59:00',
+  updated_at = CURRENT_TIMESTAMP;
+"@
+
+npx.cmd wrangler d1 execute cashi-qris-checkout-db --local --command $sql
+```
+
+## Memeriksa Status Order
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8788/api/check-status?order_id=NF-20260718-MOCK01"
+```
+
+Respons `check-status` hanya mengembalikan data publik:
 
 ```json
 {
   "success": true,
-  "order_id": "NF-20260718-ABC123",
+  "order_id": "NF-20260718-MOCK01",
   "product_name": "Nutriflakes 1 Box",
   "quantity": 1,
   "base_amount": 95000,
   "payment_amount": 95023,
-  "checkout_url": "https://cashi.id/pay/INV-9921",
+  "payment_status": "PENDING",
+  "checkout_url": "https://cashi.id/pay/NF-20260718-MOCK01",
   "qr_url": "data:image/png;base64,...",
-  "expires_at": "2026-07-18 10:00:00"
+  "expires_at": "2026-07-18 23:59:00",
+  "paid_at": null
 }
 ```
 
-Response gagal saat Cashi tidak tersedia:
+## Menguji Halaman Sukses Lokal
 
-```json
-{
-  "message": "Pembayaran belum dapat dibuat. Silakan coba kembali."
-}
-```
-
-## Test Production Setelah Deploy
-
-Setelah deploy dari GitHub selesai:
+Ubah mock order menjadi `PAID`:
 
 ```powershell
-$body = @{
-  customer_name = "Budi Santoso"
-  phone = "081234567890"
-  address = "Jl. Melati No. 10"
-  product_code = "NF-1"
-  client_request_id = [guid]::NewGuid().ToString()
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "https://DOMAIN-PRODUCTION/api/create-order" -Method Post -ContentType "application/json" -Body $body
+npx.cmd wrangler d1 execute cashi-qris-checkout-db --local --command "UPDATE orders SET payment_status = 'PAID', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE order_id = 'NF-20260718-MOCK01';"
 ```
 
-Pastikan `CASHI_API_KEY`, `ALLOWED_ORIGIN`, dan migration `0002_add_client_request_id.sql` sudah diterapkan di Cloudflare sebelum test production.
+Buka halaman sukses:
+
+```powershell
+Start-Process "http://127.0.0.1:8788/sukses.html?order_id=NF-20260718-MOCK01"
+```
+
+Jika status masih `PENDING`, halaman sukses akan mengarahkan pengguna kembali ke checkout.
 
 ## Deploy Cloudflare Pages
 
@@ -210,5 +235,7 @@ Build output directory: public
 - Jangan commit `.dev.vars`, API key, token, atau credential.
 - Secret production harus disimpan melalui Cloudflare dashboard atau perintah secret Wrangler.
 - Query D1 memakai prepared statement dan parameter binding.
-- Respons API tidak mengembalikan API key, `cashi_payload`, stack trace, atau detail internal Cloudflare.
-- Webhook Cashi saat ini belum memverifikasi signature karena tahap webhook belum dimulai.
+- Respons API tidak mengembalikan API key, `customer_name`, `phone`, `address`, `client_request_id`, `cashi_payload`, stack trace, atau detail internal Cloudflare.
+- QR URL frontend hanya menerima `data:image/png;base64`, `data:image/jpeg;base64`, atau HTTPS.
+- Checkout URL frontend hanya menerima HTTPS dari `cashi.id` atau subdomainnya.
+- Webhook Cashi belum diimplementasikan pada tahap ini.

@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Checkout Nutriflakes - Cashi QRIS Checkout</title>
-    <meta name="description" content="Form checkout Nutriflakes dengan rencana pembayaran QRIS.">
+    <title>Checkout QRIS - Cashi QRIS Checkout</title>
+    <meta name="description" content="Checkout Nutriflakes dengan pembayaran QRIS Cashi.">
     <link rel="stylesheet" href="/css/style.css">
   </head>
   <body>
@@ -20,7 +20,7 @@
     </header>
 
     <main class="checkout-layout">
-      <section class="checkout-panel">
+      <section id="orderFormView" class="checkout-panel">
         <p class="eyebrow">Form Pesanan</p>
         <h1>Checkout Nutriflakes</h1>
         <p class="muted">Isi data pengiriman untuk membuat pembayaran QRIS Cashi.</p>
@@ -66,22 +66,88 @@
         </form>
       </section>
 
-      <aside class="checkout-note">
-        <p class="eyebrow">Status Tahap 3</p>
-        <h2>Terhubung ke API Cashi.</h2>
+      <aside id="checkoutInfo" class="checkout-note">
+        <p class="eyebrow">Status Tahap 4</p>
+        <h2>Order dibuat dulu, pembayaran dipantau dari backend.</h2>
         <p>
-          Backend membuat order, menyimpan data ke D1, lalu membuat pembayaran QRIS melalui Cashi.
-          Secret, API key, dan credential pembayaran tidak disimpan di source code.
+          Setelah order berhasil dibuat, halaman ini mengambil detail QRIS dari D1 dan memantau status pembayaran tanpa membaca data sensitif dari browser.
         </p>
         <ul class="check-list">
-          <li>Validasi frontend dasar</li>
-          <li>Pages Functions untuk endpoint API</li>
-          <li>Skema D1 untuk penyimpanan order</li>
-          <li>Idempotency untuk mencegah order ganda</li>
+          <li>Nominal produk dihitung backend</li>
+          <li>QRIS dan checkout URL divalidasi di browser</li>
+          <li>Status pembayaran dicek berkala dari D1</li>
+          <li>Webhook production belum aktif pada tahap ini</li>
         </ul>
       </aside>
+
+      <section id="paymentView" class="payment-panel" aria-labelledby="paymentTitle" hidden>
+        <div class="payment-heading">
+          <p class="eyebrow">Checkout QRIS</p>
+          <h1 id="paymentTitle">Selesaikan Pembayaran</h1>
+          <p class="muted" id="paymentHelp">
+            Jangan tutup halaman ini. Status pembayaran akan dicek otomatis setelah kamu menyelesaikan transfer QRIS.
+          </p>
+        </div>
+
+        <div id="paymentAlert" class="form-alert visible info" role="status" aria-live="polite">
+          Memuat detail pembayaran...
+        </div>
+
+        <div class="payment-grid">
+          <section class="qris-section" aria-labelledby="qrisTitle">
+            <h2 id="qrisTitle">QRIS Pembayaran</h2>
+            <div class="qris-box" id="qrisBox">
+              <img id="qrisImage" alt="QRIS pembayaran" hidden>
+              <p id="qrFallback" class="muted">QRIS sedang dimuat.</p>
+            </div>
+            <p class="muted">Nominal sudah termasuk kode unik agar pembayaran mudah dicocokkan.</p>
+          </section>
+
+          <section class="payment-summary" aria-label="Ringkasan pembayaran">
+            <div class="summary-row">
+              <span>Nama produk</span>
+              <strong id="paymentProduct">-</strong>
+            </div>
+            <div class="summary-row">
+              <span>Jumlah produk</span>
+              <strong id="paymentQuantity">-</strong>
+            </div>
+            <div class="summary-row">
+              <span>Order ID</span>
+              <strong id="paymentOrderId">-</strong>
+            </div>
+            <div class="summary-row">
+              <span>Harga produk</span>
+              <strong id="paymentBaseAmount">-</strong>
+            </div>
+            <div class="summary-row summary-row-highlight">
+              <span>Nominal akhir</span>
+              <strong id="paymentAmount">-</strong>
+            </div>
+            <div class="summary-row">
+              <span>Waktu kedaluwarsa</span>
+              <strong id="paymentExpiry">-</strong>
+            </div>
+            <div class="summary-row">
+              <span>Countdown pembayaran</span>
+              <strong id="paymentCountdown">-</strong>
+            </div>
+            <div class="summary-row">
+              <span>Status pembayaran</span>
+              <strong id="paymentStatus" class="status-pill">Memuat</strong>
+            </div>
+          </section>
+        </div>
+
+        <div class="payment-actions">
+          <button id="copyAmountButton" class="button button-secondary" type="button">Salin Nominal</button>
+          <a id="openPaymentButton" class="button button-primary" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Buka Halaman Pembayaran</a>
+          <a class="button button-ghost" href="/">Kembali ke Produk</a>
+          <a id="newOrderButton" class="button button-primary" href="/checkout.html" hidden>Buat Pesanan Baru</a>
+        </div>
+      </section>
     </main>
 
-    <script src="/js/checkout.js" defer></script>
+    <script type="module" src="/js/checkout.js"></script>
   </body>
 </html>
