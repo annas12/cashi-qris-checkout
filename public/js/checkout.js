@@ -1,4 +1,4 @@
-const packages = {
+﻿const packages = {
   "NF-1": {
     label: "Nutriflakes 1 Box",
     amount: 95000
@@ -216,7 +216,7 @@ function validate(payload) {
 async function fetchWithTimeout(url, init = {}, options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const timeoutMs = options.timeoutMs || FETCH_TIMEOUT_MS;
-  controller = new AbortController();
+  const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -490,6 +490,7 @@ function initCreateOrderForm(doc, win) {
       clearPendingClientRequestId(win.sessionStorage);
       win.location.assign(`/checkout.html?order_id=${encodeURIComponent(result.order_id)}`);
     } catch (error) {
+      clearPendingClientRequestId(win.sessionStorage);
       setAlert(
         formAlert,
         error.message || "Pembayaran belum dapat dibuat. Silakan coba kembali.",
@@ -755,3 +756,4 @@ export {
   isValidQrUrl,
   parseCashiExpiry
 };
+
