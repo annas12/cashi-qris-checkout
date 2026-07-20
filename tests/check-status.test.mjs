@@ -59,8 +59,8 @@ function createOrder(overrides = {}) {
     order_id: "NF-20260718-ABC123",
     product_name: "Nutriflakes 1 Box",
     quantity: 1,
-    base_amount: 1000,
-    payment_amount: 1023,
+    base_amount: 5000,
+    payment_amount: 5023,
     payment_status: "PENDING",
     checkout_url: "https://cashi.id/pay/NF-20260718-ABC123",
     qr_url: "data:image/png;base64,iVBORw0KGgo=",
@@ -138,7 +138,7 @@ const tests = [
       assert.equal(data.success, true);
       assert.equal(data.payment_status, "PENDING");
       assert.equal(data.product_name, "Nutriflakes 1 Box");
-      assert.equal(data.payment_amount, 1023);
+      assert.equal(data.payment_amount, 5023);
     }
   ],
   [

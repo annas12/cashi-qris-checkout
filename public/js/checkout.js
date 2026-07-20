@@ -1,7 +1,7 @@
 ﻿const packages = {
   "NF-1": {
     label: "Nutriflakes 1 Box",
-    amount: 1000
+    amount: 5000
   },
   "NF-2": {
     label: "Nutriflakes 2 Box",

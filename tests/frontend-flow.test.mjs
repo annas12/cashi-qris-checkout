@@ -284,7 +284,7 @@ const tests = [
   [
     "format rupiah benar",
     () => {
-      assert.equal(formatRupiah(1023), "Rp1.023");
+      assert.equal(formatRupiah(5023), "Rp5.023");
     }
   ]
 ];

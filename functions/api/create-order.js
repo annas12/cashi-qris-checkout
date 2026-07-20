@@ -8,7 +8,7 @@ const PRODUCT_CATALOG = {
   "NF-1": {
     product_name: "Nutriflakes 1 Box",
     quantity: 1,
-    amount: 1000
+    amount: 5000
   },
   "NF-2": {
     product_name: "Nutriflakes 2 Box",
