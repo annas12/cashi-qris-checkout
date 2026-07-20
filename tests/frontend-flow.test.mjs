@@ -3,6 +3,7 @@ import {
   createPaymentPollingController,
   fetchOrderStatus as fetchCheckoutOrderStatus,
   formatRupiah,
+  initCreateOrderForm,
   isValidCheckoutUrl,
   isValidQrUrl
 } from "../public/js/checkout.js";
@@ -11,7 +12,147 @@ import {
   getSuccessDecision
 } from "../public/js/success.js";
 
+class FakeStorage {
+  constructor(entries = {}) {
+    this.map = new Map(Object.entries(entries));
+  }
+
+  getItem(key) {
+    return this.map.has(key) ? this.map.get(key) : null;
+  }
+
+  setItem(key, value) {
+    this.map.set(key, String(value));
+  }
+
+  removeItem(key) {
+    this.map.delete(key);
+  }
+}
+
+function createFormTestDocument(values) {
+  const listeners = {};
+  const fieldWrap = {
+    classList: {
+      toggle: () => {}
+    }
+  };
+  const fields = new Map(
+    ["fullName", "whatsapp", "address", "packageId"].map((name) => [
+      name,
+      {
+        closest: () => fieldWrap
+      }
+    ])
+  );
+  const errors = new Map(
+    ["fullName", "whatsapp", "address", "packageId"].map((name) => [
+      name,
+      {
+        textContent: ""
+      }
+    ])
+  );
+  const submitButton = {
+    disabled: false,
+    textContent: "Buat Pesanan QRIS"
+  };
+  const form = {
+    addEventListener: (type, handler) => {
+      listeners[type] = handler;
+    },
+    querySelector: (selector) => (selector === "button[type='submit']" ? submitButton : null)
+  };
+  const packageSelect = {
+    value: values.packageId,
+    addEventListener: () => {}
+  };
+  const orderTotal = {
+    textContent: ""
+  };
+  const formAlert = {
+    textContent: "",
+    className: "form-alert"
+  };
+
+  return {
+    doc: {
+      querySelector: (selector) => {
+        if (selector === "#checkoutForm") return form;
+        if (selector === "#packageId") return packageSelect;
+        if (selector === "#orderTotal") return orderTotal;
+        if (selector === "#formAlert") return formAlert;
+
+        const fieldMatch = selector.match(/^\[name="(.+)"\]$/);
+        if (fieldMatch) return fields.get(fieldMatch[1]) || null;
+
+        const errorMatch = selector.match(/^\[data-error-for="(.+)"\]$/);
+        if (errorMatch) return errors.get(errorMatch[1]) || null;
+
+        return null;
+      }
+    },
+    formAlert,
+    listeners,
+    submitButton
+  };
+}
+
 const tests = [
+  [
+    "frontend mereset pendingClientRequestId setelah create-order gagal",
+    async () => {
+      const values = {
+        fullName: "Budi Santoso",
+        whatsapp: "081234567890",
+        address: "Jl. Melati No. 10",
+        packageId: "NF-1"
+      };
+      const { doc, formAlert, listeners, submitButton } = createFormTestDocument(values);
+      const storage = new FakeStorage({ pendingClientRequestId: "req_frontend_failed" });
+      const originalFormData = globalThis.FormData;
+      let createOrderCalls = 0;
+
+      globalThis.FormData = class {
+        get(name) {
+          return values[name] || "";
+        }
+      };
+
+      try {
+        initCreateOrderForm(doc, {
+          sessionStorage: storage,
+          fetch: async (url, init) => {
+            createOrderCalls += 1;
+            const body = JSON.parse(init.body);
+            assert.equal(body.client_request_id, "req_frontend_failed");
+
+            return Response.json(
+              { message: "Pembayaran belum dapat dibuat. Silakan coba kembali." },
+              { status: 502 }
+            );
+          },
+          location: {
+            assign: () => {
+              throw new Error("Tidak boleh redirect saat create-order gagal");
+            }
+          }
+        });
+
+        await listeners.submit({
+          preventDefault: () => {}
+        });
+      } finally {
+        globalThis.FormData = originalFormData;
+      }
+
+      assert.equal(createOrderCalls, 1);
+      assert.equal(storage.getItem("pendingClientRequestId"), null);
+      assert.equal(submitButton.disabled, false);
+      assert.equal(submitButton.textContent, "Buat Pesanan QRIS");
+      assert.equal(formAlert.className, "form-alert visible error");
+    }
+  ],
   [
     "qr_url data PNG valid diterima frontend",
     () => {

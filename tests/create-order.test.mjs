@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { handleCreateOrder } from "../functions/api/create-order.js";
+import {
+  handleCreateOrder,
+  normalizeCashiApiKey
+} from "../functions/api/create-order.js";
 
 class FakeStatement {
   constructor(db, sql) {
@@ -104,8 +107,8 @@ class FakeStatement {
 }
 
 class FakeDB {
-  constructor() {
-    this.orders = [];
+  constructor(orders = []) {
+    this.orders = orders.map((order) => ({ ...order }));
   }
 
   prepare(sql) {
@@ -126,6 +129,29 @@ const validPayload = {
   client_request_id: "req_123456789"
 };
 
+function createStoredOrder(overrides = {}) {
+  return {
+    order_id: "NF-20260718-EXIST1",
+    client_request_id: validPayload.client_request_id,
+    customer_name: "Budi Santoso",
+    phone: "6281234567890",
+    address: "Jl. Melati No. 10",
+    product_code: "NF-1",
+    product_name: "Nutriflakes 1 Box",
+    quantity: 1,
+    base_amount: 95000,
+    payment_amount: null,
+    payment_status: "PENDING",
+    checkout_url: null,
+    qr_url: null,
+    expires_at: null,
+    cashi_payload: null,
+    created_at: "2026-07-18T01:00:00.000Z",
+    updated_at: "2026-07-18T01:00:00.000Z",
+    ...overrides
+  };
+}
+
 function createRequest(body, options = {}) {
   const headers = new Headers(options.headers || {});
 
@@ -144,8 +170,16 @@ function createRequest(body, options = {}) {
   });
 }
 
-function createSuccessFetch(assertion = () => {}) {
+function createSuccessFetch(assertion = () => {}, responsePayload = null) {
   let calls = 0;
+  const payload = responsePayload || {
+    success: true,
+    order_id: "INV-9921",
+    amount: 95023,
+    checkout_url: "https://cashi.id/pay/INV-9921",
+    qrUrl: "data:image/png;base64,mock_qris",
+    expires_at: "2026-07-18 10:00:00"
+  };
 
   return {
     get calls() {
@@ -155,14 +189,7 @@ function createSuccessFetch(assertion = () => {}) {
       calls += 1;
       assertion(url, init);
 
-      return Response.json({
-        success: true,
-        order_id: "INV-9921",
-        amount: 95023,
-        checkout_url: "https://cashi.id/pay/INV-9921",
-        qrUrl: "data:image/png;base64,mock_qris",
-        expires_at: "2026-07-18 10:00:00"
-      });
+      return Response.json(payload);
     }
   };
 }
@@ -205,6 +232,36 @@ async function captureLogs(fn) {
 
 const tests = [
   [
+    "API key di-trim sebelum dikirim ke Cashi",
+    async () => {
+      const mock = createSuccessFetch((url, init) => {
+        assert.equal(init.headers["x-api-key"], "test_api_key");
+      });
+      await callHandler({
+        env: { CASHI_API_KEY: "  test_api_key \r\n" },
+        fetchImpl: mock.fetchImpl
+      });
+    }
+  ],
+  [
+    "API key dengan wrapping quote dibersihkan",
+    async () => {
+      const mock = createSuccessFetch((url, init) => {
+        assert.equal(init.headers["x-api-key"], "test_api_key");
+      });
+      await callHandler({
+        env: { CASHI_API_KEY: "\"test_api_key\"" },
+        fetchImpl: mock.fetchImpl
+      });
+    }
+  ],
+  [
+    "API key dengan prefix header dibersihkan",
+    () => {
+      assert.equal(normalizeCashiApiKey("x-api-key: 'test_api_key'"), "test_api_key");
+    }
+  ],
+  [
     "Produk NF-1 menghasilkan harga backend 95000",
     async () => {
       const mock = createSuccessFetch((url, init) => {
@@ -216,6 +273,31 @@ const tests = [
       assert.equal(response.status, 201);
       assert.equal(data.base_amount, 95000);
       assert.equal(db.orders[0].base_amount, 95000);
+    }
+  ],
+  [
+    "Request Cashi mengirim Accept application/json dan header lengkap",
+    async () => {
+      const mock = createSuccessFetch((url, init) => {
+        assert.equal(init.headers["Accept"], "application/json");
+        assert.equal(init.headers["Content-Type"], "application/json");
+        assert.equal(init.headers["x-api-key"], "test_api_key");
+        assert.equal(Object.values(init.headers).every((value) => value !== undefined), true);
+      });
+      await callHandler({ fetchImpl: mock.fetchImpl });
+    }
+  ],
+  [
+    "Payload Cashi memakai amount number dan order_id string",
+    async () => {
+      const mock = createSuccessFetch((url, init) => {
+        const body = JSON.parse(init.body);
+        assert.equal(typeof body.amount, "number");
+        assert.equal(body.amount, 95000);
+        assert.equal(typeof body.order_id, "string");
+        assert.match(body.order_id, /^NF-20260718-/);
+      });
+      await callHandler({ fetchImpl: mock.fetchImpl });
     }
   ],
   [
@@ -299,7 +381,7 @@ const tests = [
     async () => {
       const { result, logs } = await captureLogs(() =>
         callHandler({
-          fetchImpl: async () => new Response("{}", { status: 500 })
+          fetchImpl: async () => new Response(null, { status: 400 })
         })
       );
 
@@ -307,6 +389,14 @@ const tests = [
       assert.equal(result.db.orders[0].payment_status, "PAYMENT_FAILED");
       assert.ok(!JSON.stringify(result.data).includes("test_api_key"));
       assert.ok(!logs.join("\n").includes("test_api_key"));
+      assert.ok(logs.join("\n").includes("\"api_key_present\":true"));
+      assert.ok(logs.join("\n").includes("\"api_key_length\":12"));
+      assert.ok(logs.join("\n").includes("\"api_key_prefix\":\"test\""));
+      assert.ok(logs.join("\n").includes("\"api_key_suffix\":\"_key\""));
+      assert.ok(logs.join("\n").includes("\"request_amount\":95000"));
+      assert.ok(logs.join("\n").includes("\"request_url\":\"https://cashi.id/api/create-order\""));
+      assert.ok(logs.join("\n").includes("\"response_content_type\":\"<no content-type>\""));
+      assert.ok(logs.join("\n").includes("\"response_body\":\"<empty response body>\""));
     }
   ],
   [
@@ -315,6 +405,7 @@ const tests = [
       const mock = createSuccessFetch((url, init) => {
         assert.equal(url, "https://cashi.id/api/create-order");
         assert.equal(init.headers["x-api-key"], "test_api_key");
+        assert.equal(init.headers["Accept"], "application/json");
       });
       const { data, db } = await callHandler({ fetchImpl: mock.fetchImpl });
 
@@ -324,6 +415,55 @@ const tests = [
       assert.equal(db.orders[0].payment_amount, 95023);
       assert.equal(db.orders[0].checkout_url, "https://cashi.id/pay/INV-9921");
       assert.ok(db.orders[0].cashi_payload.includes("INV-9921"));
+    }
+  ],
+  [
+    "Respons camelCase Cashi dapat diproses",
+    async () => {
+      const mock = createSuccessFetch(
+        () => {},
+        {
+          success: true,
+          orderId: "INV-CAMEL",
+          provider_order_id: "PROVIDER-CAMEL",
+          amount: 95023,
+          checkout_url: "https://cashi.id/pay/INV-CAMEL",
+          qrUrl: "data:image/png;base64,camel_qris",
+          qr_string: "000201010212",
+          expires_at: "2026-07-18 10:00:00"
+        }
+      );
+      const { data, db } = await callHandler({ fetchImpl: mock.fetchImpl });
+
+      assert.equal(data.payment_amount, 95023);
+      assert.equal(data.checkout_url, "https://cashi.id/pay/INV-CAMEL");
+      assert.equal(data.qr_url, "data:image/png;base64,camel_qris");
+      assert.ok(db.orders[0].cashi_payload.includes("INV-CAMEL"));
+      assert.ok(db.orders[0].cashi_payload.includes("qr_string"));
+    }
+  ],
+  [
+    "Respons snake_case Cashi dapat diproses",
+    async () => {
+      const mock = createSuccessFetch(
+        () => {},
+        {
+          success: true,
+          order_id: "INV_SNAKE",
+          provider_order_id: "PROVIDER_SNAKE",
+          amount: 95023,
+          checkout_url: "https://cashi.id/pay/INV_SNAKE",
+          qr_url: "data:image/png;base64,snake_qris",
+          qr_string: "000201010212",
+          expires_at: "2026-07-18 10:00:00"
+        }
+      );
+      const { data, db } = await callHandler({ fetchImpl: mock.fetchImpl });
+
+      assert.equal(data.payment_amount, 95023);
+      assert.equal(data.checkout_url, "https://cashi.id/pay/INV_SNAKE");
+      assert.equal(data.qr_url, "data:image/png;base64,snake_qris");
+      assert.ok(db.orders[0].cashi_payload.includes("provider_order_id"));
     }
   ],
   [
@@ -337,6 +477,30 @@ const tests = [
       assert.equal(first.data.order_id, second.data.order_id);
       assert.equal(db.orders.length, 1);
       assert.equal(mock.calls, 1);
+    }
+  ],
+  [
+    "Order PAYMENT_FAILED tidak dipakai ulang untuk request Cashi baru",
+    async () => {
+      const db = new FakeDB([
+        createStoredOrder({
+          payment_status: "PAYMENT_FAILED",
+          updated_at: "2026-07-18T01:01:00.000Z"
+        })
+      ]);
+      let calls = 0;
+      const { response, db: resultDb } = await callHandler({
+        env: { DB: db },
+        fetchImpl: async () => {
+          calls += 1;
+          return Response.json({ success: true });
+        }
+      });
+
+      assert.equal(response.status, 409);
+      assert.equal(calls, 0);
+      assert.equal(resultDb.orders.length, 1);
+      assert.equal(resultDb.orders[0].order_id, "NF-20260718-EXIST1");
     }
   ],
   [

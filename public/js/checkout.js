@@ -490,6 +490,7 @@ function initCreateOrderForm(doc, win) {
       clearPendingClientRequestId(win.sessionStorage);
       win.location.assign(`/checkout.html?order_id=${encodeURIComponent(result.order_id)}`);
     } catch (error) {
+      clearPendingClientRequestId(win.sessionStorage);
       setAlert(
         formAlert,
         error.message || "Pembayaran belum dapat dibuat. Silakan coba kembali.",
@@ -748,9 +749,13 @@ if (typeof document !== "undefined") {
 }
 
 export {
+  clearPendingClientRequestId,
+  createOrder,
   createPaymentPollingController,
   fetchOrderStatus,
   formatRupiah,
+  getClientRequestId,
+  initCreateOrderForm,
   isValidCheckoutUrl,
   isValidQrUrl,
   parseCashiExpiry

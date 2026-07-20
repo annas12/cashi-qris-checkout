@@ -77,7 +77,16 @@ function safeLog(message, details = {}) {
   console.error(message, {
     order_id: details.order_id,
     status: details.status,
-    reason: details.reason
+    reason: details.reason,
+    api_key_present: details.api_key_present,
+    api_key_length: details.api_key_length,
+    api_key_prefix: details.api_key_prefix,
+    api_key_suffix: details.api_key_suffix,
+    request_amount: details.request_amount,
+    request_order_id: details.request_order_id,
+    request_url: details.request_url,
+    response_content_type: details.response_content_type,
+    response_body: details.response_body
   });
 }
 
@@ -132,6 +141,41 @@ function normalizePhone(value) {
 
 function normalizeProductCode(value) {
   return String(value || "").trim().toUpperCase();
+}
+
+function unwrapApiKeyQuotes(value) {
+  const text = String(value || "").trim();
+
+  if (text.length >= 2) {
+    const first = text[0];
+    const last = text[text.length - 1];
+
+    if ((first === "\"" && last === "\"") || (first === "'" && last === "'")) {
+      return text.slice(1, -1).trim();
+    }
+  }
+
+  return text;
+}
+
+function normalizeCashiApiKey(value) {
+  let apiKey = unwrapApiKeyQuotes(value);
+
+  if (/^x-api-key\s*:/i.test(apiKey)) {
+    apiKey = apiKey.replace(/^x-api-key\s*:/i, "").trim();
+    apiKey = unwrapApiKeyQuotes(apiKey);
+  }
+
+  return apiKey;
+}
+
+function getApiKeyDiagnostics(apiKey) {
+  return {
+    api_key_present: apiKey.length > 0,
+    api_key_length: apiKey.length,
+    api_key_prefix: apiKey.slice(0, 4),
+    api_key_suffix: apiKey.slice(-4)
+  };
 }
 
 function validateClientRequestId(value) {
@@ -311,10 +355,12 @@ function normalizeCashiResponse(payload) {
   const amount = Number(payload.amount);
 
   return {
-    order_id: payload.order_id,
+    order_id: payload.order_id || payload.orderId || null,
+    provider_order_id: payload.provider_order_id || payload.providerOrderId || null,
     amount: Number.isFinite(amount) ? amount : null,
-    checkout_url: payload.checkout_url || null,
+    checkout_url: payload.checkout_url || payload.checkoutUrl || null,
     qr_url: payload.qrUrl || payload.qr_url || null,
+    qr_string: payload.qr_string || payload.qrString || null,
     expires_at: payload.expires_at || null
   };
 }
@@ -331,6 +377,10 @@ function serializeCashiPayload(payload) {
 
 function isCompletedPayment(order) {
   return Boolean(order.payment_amount || order.checkout_url || order.qr_url);
+}
+
+function isPaymentFailed(order) {
+  return String(order?.payment_status || "").trim().toUpperCase() === "PAYMENT_FAILED";
 }
 
 function toFrontendResponse(order) {
@@ -366,6 +416,49 @@ async function mockCashiResponse(order, env) {
   return null;
 }
 
+function truncateText(value, maxLength = 1000) {
+  const text = String(value || "");
+
+  if (!text) {
+    return "<empty response body>";
+  }
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return text.slice(0, maxLength);
+}
+
+async function readCashiResponseText(response) {
+  try {
+    return await response.text();
+  } catch (error) {
+    return "<unable to read response body>";
+  }
+}
+
+function createCashiError(message, details) {
+  const error = new Error(message);
+  Object.assign(error, details);
+  return error;
+}
+
+function buildCashiRequest(order, normalizedApiKey) {
+  return {
+    url: CASHI_CREATE_ORDER_URL,
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "x-api-key": normalizedApiKey
+    },
+    payload: {
+      amount: Number(order.base_amount),
+      order_id: String(order.order_id)
+    }
+  };
+}
+
 async function callCashi(order, env, options = {}) {
   const mocked = await mockCashiResponse(order, env);
 
@@ -373,8 +466,17 @@ async function callCashi(order, env, options = {}) {
     return mocked;
   }
 
-  if (!env.CASHI_API_KEY) {
-    throw new Error("Cashi API key is not configured");
+  const normalizedApiKey = normalizeCashiApiKey(env.CASHI_API_KEY);
+  const requestConfig = buildCashiRequest(order, normalizedApiKey);
+  const diagnostics = {
+    ...getApiKeyDiagnostics(normalizedApiKey),
+    request_amount: requestConfig.payload.amount,
+    request_order_id: requestConfig.payload.order_id,
+    request_url: requestConfig.url
+  };
+
+  if (!normalizedApiKey) {
+    throw createCashiError("Cashi API key is not configured", diagnostics);
   }
 
   const fetchImpl = options.fetchImpl || fetch;
@@ -382,32 +484,60 @@ async function callCashi(order, env, options = {}) {
   const timeout = setTimeout(() => controller.abort(), CASHI_TIMEOUT_MS);
 
   try {
-    const response = await fetchImpl(CASHI_CREATE_ORDER_URL, {
+    const response = await fetchImpl(requestConfig.url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": env.CASHI_API_KEY
-      },
-      body: JSON.stringify({
-        amount: order.base_amount,
-        order_id: order.order_id
-      }),
+      headers: requestConfig.headers,
+      body: JSON.stringify(requestConfig.payload),
       signal: controller.signal
     });
+    const responseContentType = response.headers.get("Content-Type") || "<no content-type>";
 
     if (!response.ok) {
-      const error = new Error("Cashi returned a non-2xx response");
-      error.status = response.status;
-      throw error;
+      const responseText = await readCashiResponseText(response);
+
+      throw createCashiError("Cashi returned a non-2xx response", {
+        ...diagnostics,
+        status: response.status,
+        response_content_type: responseContentType,
+        response_body: truncateText(responseText)
+      });
     }
 
-    const payload = await response.json();
+    const responseText = await readCashiResponseText(response);
+    let payload;
+
+    try {
+      payload = JSON.parse(responseText);
+    } catch (error) {
+      throw createCashiError("Cashi response was not valid JSON", {
+        ...diagnostics,
+        status: response.status,
+        response_content_type: responseContentType,
+        response_body: truncateText(responseText)
+      });
+    }
 
     if (!payload || payload.success !== true) {
-      throw new Error("Cashi response was not successful");
+      throw createCashiError("Cashi response was not successful", {
+        ...diagnostics,
+        status: response.status,
+        response_content_type: responseContentType,
+        response_body: truncateText(responseText)
+      });
     }
 
     return payload;
+  } catch (error) {
+    if (error?.request_url) {
+      throw error;
+    }
+
+    throw createCashiError(error instanceof Error ? error.message : "Cashi request failed", {
+      ...diagnostics,
+      status: error?.name === "AbortError" ? "timeout" : "request_failed",
+      response_content_type: "<no content-type>",
+      response_body: "<empty response body>"
+    });
   } finally {
     clearTimeout(timeout);
   }
@@ -475,6 +605,15 @@ export async function handleCreateOrder(context, options = {}) {
     const payload = await readJsonBody(context.request);
     const orderData = validateOrderPayload(payload);
     const existing = await findOrderByClientRequestId(context.env.DB, orderData.clientRequestId);
+
+    if (existing && isPaymentFailed(existing)) {
+      return json(
+        context,
+        { message: "Pembayaran sebelumnya gagal. Silakan coba kembali." },
+        409
+      );
+    }
+
     const order = existing || (await insertPendingOrder(context.env.DB, orderData, options));
 
     if (isCompletedPayment(order)) {
@@ -490,7 +629,16 @@ export async function handleCreateOrder(context, options = {}) {
       safeLog("Cashi create order failed", {
         order_id: order.order_id,
         status: error.status || "request_failed",
-        reason: "payment_create_failed"
+        reason: "payment_create_failed",
+        api_key_present: error.api_key_present,
+        api_key_length: error.api_key_length,
+        api_key_prefix: error.api_key_prefix,
+        api_key_suffix: error.api_key_suffix,
+        request_amount: error.request_amount,
+        request_order_id: error.request_order_id,
+        request_url: error.request_url,
+        response_content_type: error.response_content_type,
+        response_body: error.response_body
       });
 
       return json(
@@ -539,6 +687,7 @@ export function onRequestGet(context) {
 
 export {
   PRODUCT_CATALOG,
+  normalizeCashiApiKey,
   normalizeCashiResponse,
   normalizePhone,
   validateOrderPayload
