@@ -118,7 +118,7 @@ class FakeDB {
 function createOrder(overrides = {}) {
   return {
     order_id: "NF-20260718-ABC123",
-    payment_amount: 95023,
+    payment_amount: 1023,
     payment_status: "PENDING",
     paid_at: null,
     updated_at: null,
@@ -131,7 +131,7 @@ function createPayload(overrides = {}) {
     event: "PAYMENT_SETTLED",
     data: {
       order_id: "NF-20260718-ABC123",
-      amount: 95023,
+      amount: 1023,
       status: "SETTLED",
       paid_at: "2026-07-18 10:20:00",
       ...(overrides.data || {})

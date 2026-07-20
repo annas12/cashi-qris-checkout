@@ -174,13 +174,13 @@ INSERT INTO orders (
   checkout_url, qr_url, expires_at, created_at, updated_at
 ) VALUES (
   'NF-20260718-MOCK01', 'stage4-mock-01', 'Mock Buyer', '6281234567890',
-  'Jl. Mock No. 1', 'NF-1', 'Nutriflakes 1 Box', 1, 95000, 95023,
+  'Jl. Mock No. 1', 'NF-1', 'Nutriflakes 1 Box', 1, 1000, 1023,
   'PENDING', 'https://cashi.id/pay/NF-20260718-MOCK01',
   'data:image/png;base64,iVBORw0KGgo=', '2026-07-18 23:59:00',
   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 ) ON CONFLICT(order_id) DO UPDATE SET
   payment_status = 'PENDING',
-  payment_amount = 95023,
+  payment_amount = 1023,
   checkout_url = 'https://cashi.id/pay/NF-20260718-MOCK01',
   qr_url = 'data:image/png;base64,iVBORw0KGgo=',
   expires_at = '2026-07-18 23:59:00',
@@ -204,8 +204,8 @@ Respons `check-status` hanya mengembalikan data publik:
   "order_id": "NF-20260718-MOCK01",
   "product_name": "Nutriflakes 1 Box",
   "quantity": 1,
-  "base_amount": 95000,
-  "payment_amount": 95023,
+  "base_amount": 1000,
+  "payment_amount": 1023,
   "payment_status": "PENDING",
   "checkout_url": "https://cashi.id/pay/NF-20260718-MOCK01",
   "qr_url": "data:image/png;base64,...",
@@ -231,7 +231,7 @@ Event pembayaran berhasil yang diterima:
   "event": "PAYMENT_SETTLED",
   "data": {
     "order_id": "NF-20260718-ABC123",
-    "amount": 95023,
+    "amount": 1023,
     "status": "SETTLED",
     "paid_at": "2026-07-18 10:20:00"
   }
@@ -261,7 +261,7 @@ npx.cmd wrangler d1 execute cashi-qris-checkout-db --local --command "SELECT nam
 Membuat payload test dan signature dari file UTF-8 tanpa BOM:
 
 ```powershell
-$payload = '{"event":"PAYMENT_SETTLED","data":{"order_id":"NF-20260718-MOCK01","amount":95023,"status":"SETTLED","paid_at":"2026-07-18 10:20:00"}}'
+$payload = '{"event":"PAYMENT_SETTLED","data":{"order_id":"NF-20260718-MOCK01","amount":1023,"status":"SETTLED","paid_at":"2026-07-18 10:20:00"}}'
 [System.IO.File]::WriteAllText(
   (Join-Path (Get-Location) "webhook-payload.json"),
   $payload,

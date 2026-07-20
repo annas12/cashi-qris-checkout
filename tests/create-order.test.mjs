@@ -139,7 +139,7 @@ function createStoredOrder(overrides = {}) {
     product_code: "NF-1",
     product_name: "Nutriflakes 1 Box",
     quantity: 1,
-    base_amount: 95000,
+    base_amount: 1000,
     payment_amount: null,
     payment_status: "PENDING",
     checkout_url: null,
@@ -175,7 +175,7 @@ function createSuccessFetch(assertion = () => {}, responsePayload = null) {
   const payload = responsePayload || {
     success: true,
     order_id: "INV-9921",
-    amount: 95023,
+    amount: 1023,
     checkout_url: "https://cashi.id/pay/INV-9921",
     qrUrl: "data:image/png;base64,mock_qris",
     expires_at: "2026-07-18 10:00:00"
@@ -262,17 +262,17 @@ const tests = [
     }
   ],
   [
-    "Produk NF-1 menghasilkan harga backend 95000",
+    "Produk NF-1 menghasilkan harga backend 1000",
     async () => {
       const mock = createSuccessFetch((url, init) => {
         const body = JSON.parse(init.body);
-        assert.equal(body.amount, 95000);
+        assert.equal(body.amount, 1000);
       });
       const { response, data, db } = await callHandler({ fetchImpl: mock.fetchImpl });
 
       assert.equal(response.status, 201);
-      assert.equal(data.base_amount, 95000);
-      assert.equal(db.orders[0].base_amount, 95000);
+      assert.equal(data.base_amount, 1000);
+      assert.equal(db.orders[0].base_amount, 1000);
     }
   ],
   [
@@ -293,7 +293,7 @@ const tests = [
       const mock = createSuccessFetch((url, init) => {
         const body = JSON.parse(init.body);
         assert.equal(typeof body.amount, "number");
-        assert.equal(body.amount, 95000);
+        assert.equal(body.amount, 1000);
         assert.equal(typeof body.order_id, "string");
         assert.match(body.order_id, /^NF-20260718-/);
       });
@@ -305,13 +305,13 @@ const tests = [
     async () => {
       const mock = createSuccessFetch((url, init) => {
         const body = JSON.parse(init.body);
-        assert.equal(body.amount, 95000);
+        assert.equal(body.amount, 1000);
       });
       const payload = { ...validPayload, amount: 1, price: 1 };
       const { data, db } = await callHandler({ payload, fetchImpl: mock.fetchImpl });
 
-      assert.equal(data.base_amount, 95000);
-      assert.equal(db.orders[0].base_amount, 95000);
+      assert.equal(data.base_amount, 1000);
+      assert.equal(db.orders[0].base_amount, 1000);
     }
   ],
   [
@@ -419,7 +419,7 @@ const tests = [
       assert.ok(logs.join("\n").includes("\"api_key_length\":12"));
       assert.ok(logs.join("\n").includes("\"api_key_prefix\":\"test\""));
       assert.ok(logs.join("\n").includes("\"api_key_suffix\":\"_key\""));
-      assert.ok(logs.join("\n").includes("\"request_amount\":95000"));
+      assert.ok(logs.join("\n").includes("\"request_amount\":1000"));
       assert.ok(logs.join("\n").includes("\"request_url\":\"https://cashi.id/api/create-order\""));
       assert.ok(logs.join("\n").includes("\"response_content_type\":\"<no content-type>\""));
       assert.ok(logs.join("\n").includes("\"response_body\":\"<empty response body>\""));
@@ -435,10 +435,10 @@ const tests = [
       });
       const { data, db } = await callHandler({ fetchImpl: mock.fetchImpl });
 
-      assert.equal(data.payment_amount, 95023);
+      assert.equal(data.payment_amount, 1023);
       assert.equal(data.checkout_url, "https://cashi.id/pay/INV-9921");
       assert.equal(data.qr_url, "data:image/png;base64,mock_qris");
-      assert.equal(db.orders[0].payment_amount, 95023);
+      assert.equal(db.orders[0].payment_amount, 1023);
       assert.equal(db.orders[0].checkout_url, "https://cashi.id/pay/INV-9921");
       assert.ok(db.orders[0].cashi_payload.includes("INV-9921"));
     }
@@ -452,7 +452,7 @@ const tests = [
           success: true,
           orderId: "INV-CAMEL",
           provider_order_id: "PROVIDER-CAMEL",
-          amount: 95023,
+          amount: 1023,
           checkout_url: "https://cashi.id/pay/INV-CAMEL",
           qrUrl: "data:image/png;base64,camel_qris",
           qr_string: "000201010212",
@@ -461,7 +461,7 @@ const tests = [
       );
       const { data, db } = await callHandler({ fetchImpl: mock.fetchImpl });
 
-      assert.equal(data.payment_amount, 95023);
+      assert.equal(data.payment_amount, 1023);
       assert.equal(data.checkout_url, "https://cashi.id/pay/INV-CAMEL");
       assert.equal(data.qr_url, "data:image/png;base64,camel_qris");
       assert.ok(db.orders[0].cashi_payload.includes("INV-CAMEL"));
@@ -477,7 +477,7 @@ const tests = [
           success: true,
           order_id: "INV_SNAKE",
           provider_order_id: "PROVIDER_SNAKE",
-          amount: 95023,
+          amount: 1023,
           checkout_url: "https://cashi.id/pay/INV_SNAKE",
           qr_url: "data:image/png;base64,snake_qris",
           qr_string: "000201010212",
@@ -486,7 +486,7 @@ const tests = [
       );
       const { data, db } = await callHandler({ fetchImpl: mock.fetchImpl });
 
-      assert.equal(data.payment_amount, 95023);
+      assert.equal(data.payment_amount, 1023);
       assert.equal(data.checkout_url, "https://cashi.id/pay/INV_SNAKE");
       assert.equal(data.qr_url, "data:image/png;base64,snake_qris");
       assert.ok(db.orders[0].cashi_payload.includes("provider_order_id"));
