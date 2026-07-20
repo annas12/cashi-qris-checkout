@@ -40,12 +40,19 @@ class HttpError extends Error {
 function getOriginHeaders(request, env) {
   const origin = request.headers.get("Origin");
   const allowedOrigin = String(env.ALLOWED_ORIGIN || "").trim();
+  let requestOrigin = "";
+
+  try {
+    requestOrigin = new URL(request.url).origin;
+  } catch (error) {
+    requestOrigin = "";
+  }
 
   if (!origin) {
     return { allowed: true, headers: {} };
   }
 
-  if (!allowedOrigin || origin !== allowedOrigin) {
+  if (origin !== requestOrigin && origin !== allowedOrigin) {
     return { allowed: false, headers: {} };
   }
 

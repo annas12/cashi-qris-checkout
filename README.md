@@ -62,14 +62,17 @@ Buat secret berikut di Cloudflare Pages:
 
 ```powershell
 npx.cmd wrangler@latest pages secret put CASHI_API_KEY
-npx.cmd wrangler@latest pages secret put ALLOWED_ORIGIN
 npx.cmd wrangler@latest pages secret put CASHI_WEBHOOK_SECRET --project-name cashi-qris-checkout
 ```
 
-Isi `ALLOWED_ORIGIN` dengan origin website production, misalnya:
+`ALLOWED_ORIGIN` tidak wajib untuk request dari domain Pages yang sama. Jika perlu mengizinkan origin tambahan, isi dengan origin website production, misalnya:
 
 ```text
 https://nama-project.pages.dev
+```
+
+```powershell
+npx.cmd wrangler@latest pages secret put ALLOWED_ORIGIN
 ```
 
 ## Perintah Windows PowerShell

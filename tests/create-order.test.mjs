@@ -377,6 +377,32 @@ const tests = [
     }
   ],
   [
+    "Origin same-origin tetap diizinkan saat ALLOWED_ORIGIN kosong",
+    async () => {
+      const mock = createSuccessFetch();
+      const { response } = await callHandler({
+        env: { ALLOWED_ORIGIN: "" },
+        requestOptions: { origin: "https://checkout.example" },
+        fetchImpl: mock.fetchImpl
+      });
+
+      assert.equal(response.status, 201);
+    }
+  ],
+  [
+    "Origin same-origin tetap diizinkan saat ALLOWED_ORIGIN berisi URL lama",
+    async () => {
+      const mock = createSuccessFetch();
+      const { response } = await callHandler({
+        env: { ALLOWED_ORIGIN: "https://old-preview.example" },
+        requestOptions: { origin: "https://checkout.example" },
+        fetchImpl: mock.fetchImpl
+      });
+
+      assert.equal(response.status, 201);
+    }
+  ],
+  [
     "API Cashi gagal menghasilkan HTTP 502",
     async () => {
       const { result, logs } = await captureLogs(() =>
