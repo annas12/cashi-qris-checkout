@@ -1,4 +1,4 @@
-const packages = {
+﻿const packages = {
   "NF-1": {
     label: "Nutriflakes 1 Box",
     amount: 95000
@@ -760,3 +760,4 @@ export {
   isValidQrUrl,
   parseCashiExpiry
 };
+
